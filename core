@@ -1,0 +1,271 @@
+buffer = {}
+ami = peripheral.wrap("adventure map interface_13")
+commandBlock = peripheral.wrap("bottom")
+dataPath = "players/"
+maxDays = 7
+logLevel = {1, 2, 3, 3.1, 3.2, 3.3, 4}
+
+local function log(text, level)
+	 local go = false
+  for i = 1, #logLevel do
+    if level == logLevel[i] then
+      go = true
+      break
+    end
+  end
+  if go then
+    local f = fs.open("log", "a")
+    f.writeLine(text)
+    f.close()
+    print(text)
+  end
+end
+
+local function writeTableToFile(array, path)
+	local f = fs.open(path, "w")
+	for i = 1, #array do
+		f.writeLine(array[i])
+	end
+	f.close()
+end
+
+local function readTableFromFile(path)
+	if not fs.exists(path) then return nil end
+	local f = fs.open(path, "r")
+	local temp = ""
+	local arr = {}
+	local i = 1
+	while true do
+		temp = f.readLine()
+		if temp == nil then break end
+		arr[i] = temp
+		i = i + 1
+	end
+	f.close()
+	return arr
+end
+
+local function GET(url)
+	local l = http.get(url)
+	if l then
+		local retValue = l.readAll()
+		l.close()
+		return retValue, true
+	else
+		return nil, false
+	end
+		
+end
+
+local function timeFormat(time)
+	return string.sub(time, 1, 10).."%20"..string.sub(time, 12, string.len(time))
+end
+
+function getWorldTime()
+  repeat
+  		response, state = GET("http://www.timeapi.org/pdt/in+11+hours")
+  until state
+  return timeFormat(response)
+end
+
+function playerLoginDetect()
+    while true do
+            local e, user_name = os.pullEvent("player_login")
+            log("player "..user_name.." joined", 4)
+           table.insert(buffer, user_name)
+            --....
+    end
+end
+
+local function isOnline(playerName)
+  local p = ami.getPlayerByName(playerName)
+  if p then 
+    return true 
+  end
+  return false
+end
+	commandsPath = "tableitems/"
+	giveCount = {1,2,5,10,15,25,32}  -- ?????????? ?????????, ?????????? ? 1-?? ?? 7-? ????
+	tableGreateDays = {
+	"01-01",
+	"03-08",
+	"07-25",
+	"08-23"
+	}  --???? ?????????. ???????? ? ??? ?? ??????? ?????? ????????? ? tableitems/greateDays   UTF-8
+
+function getListItemsCommands()  -- ????????? ?????????? ??????? ? 7-? ????????????, ??????, ??????????
+	globalTableItems = {}
+	globalTableCommands = {}
+	globalNamesGreateDay = {}
+		for i = 1, maxDays do
+			globalTableItems[i] =  readTableFromFile(commandsPath.."giveitem_"..i)
+		end
+	globalTableCommands = readTableFromFile(commandsPath.."commands")
+	globalNamesGreateDay = readTableFromFile(commandsPath.."greateDays")
+end
+
+
+function sendMail(name_player, msg)
+    commandBlock.setCommand("/mail "..name_player.." "..msg)
+    commandBlock.runCommand()
+end
+
+function sayChat(msg)
+    commandBlock.setCommand("/say "..msg)
+    commandBlock.runCommand()
+end
+
+
+function giveItem(name_player,  id, count) 
+    commandBlock.setCommand("/give "..name_player.." "..id.." "..count)
+    commandBlock.runCommand()
+end
+
+function greateDays(name_player, full_data)
+ local mm_dd = string.sub(full_data,6,10) -- ???????? MM-DD ????? ? ????
+	for i = 1, #tableGreateDays do
+		if mm_dd == tableGreateDays[i] then
+			giveItem(name_player, 264, 64) -- ?????? ???? ??????? ? ????? ????????? :)
+			--?????: ??????? ???? ????????????! ?? ????????? 64 ??????!
+			local msg = name_player.." "..globalNamesGreateDay[i].." "..globalTableCommands[8]
+			sendMail(name_player, msg)
+			log(name_player.." "..mm_dd.." accept 64 diamonds" , 1)
+			break
+		end
+	end
+
+end
+
+function dailyGiveout(PlayerName, playerData) -- ?????? ????, ????? ? ???, ? ??? 
+	local Days, full_data, long_seria, crash_seria = playerData[1], playerData[2], playerData[3], playerData[4]
+	local day_table_items = globalTableItems[Days] -- ???????? ?????? ?? ?????????? ??????? ??? ???????? ???, 
+	--??????????? ?????? ??? ????? ??????? ????? ???? ?????? 
+	local target_item = day_table_items[math.random(1,#day_table_items)]  -- ???????? ????????? ??????? (??????)		
+	local id_item = target_item:match('id=(.+)')  --???????? ID:meta
+	local name_item = string.sub(target_item, 1 ,#target_item - #target_item:match('id=.+')) -- ???????? ???
+	
+	greateDays(PlayerName, full_data)  -- ?????????, ?? ???????? ?? ???????, ???? ??, ?? ?????? ???. ????.
+	
+		if crash_seria then
+		   -- ??????? ??????, ??? ??? ????? ???? ????????
+		   local msg = globalTableCommands[4]
+		   sendMail(PlayerName, msg)
+		end
+		
+		if long_seria > 10 then
+		   -- ??????? ? ????? ???, ??? ????? PlayerName ????? ?????? ???????!
+		   -- ??????:  ????? ??? ????? ?? ?????? (13) ??. ??????!
+		   -- ??????:  ?? ????????? ????? ?????? ???????!
+		   local msg = globalTableCommands[5].." "..PlayerName.." "..globalTableCommands[6]..
+		   " ("..long_seria..") "..globalTableCommands[2]
+		   sayChat(msg)
+		   msg = globalTableCommands[7]
+		   sayChat(msg)
+		end
+		
+		giveItem(PlayerName, id_item, giveCount[Days]) -- ?????? ????????? ????? ??
+		local msg = globalTableCommands[1].." ("..Days..") "..globalTableCommands[2]
+		sendMail(PlayerName, msg)
+		msg = globalTableCommands[3].." ("..giveCount[Days]..") "..name_item
+		sendMail(PlayerName, msg)
+		log(PlayerName.." give out " ..giveCount[Days].." id="..id_item, 1)
+end
+
+local function setPlayerData(playerName, newData)
+	local path = dataPath .. playerName
+	writeTableToFile(newData, path)
+end
+
+local function getPlayerData(playerName)
+	local path = dataPath .. playerName
+	local playerData = readTableFromFile(path)
+	--CREATE NEW PLAYER
+	if playerData == nil then
+		writeTableToFile({"0"}, path)
+		playerData = readTableFromFile(path)
+		log("CREATED NEW FILE:" .. playerName, 1)
+	end
+	return playerData
+end
+
+local function is24passed(t1, t2)
+		repeat
+   response, state = GET("http://computercraft.ru/scr/days.php?d0="..t1.."&d1="..t2) 
+  until state
+  response = tonumber(response)
+	if ((response >= 86400) and (response < 172800)) then
+		return true, 1
+	elseif response > 172800 then
+		return true, 2
+	end
+	return false, 0
+end
+
+function onPlayerJoin(playerName)
+	local playerData = getPlayerData(playerName)
+	local thisTime = getWorldTime()
+
+	if tonumber(playerData[1]) < 1 then 
+		playerData[1] = 1
+		playerData[2] = thisTime
+  playerData[3] = 1
+  playerData[4] = false
+  if isOnline(playerName) then
+  		setPlayerData(playerName, playerData)
+    log("Data for new player "..playerName.." is set", 3)
+  		dailyGiveout(playerName, playerData)
+  end
+	else
+		local _24pass, state = is24passed(playerData[2], thisTime)
+		if _24pass then
+			if state == 1 then
+				playerData[1] = playerData[1] + 1
+				if playerData[1] > maxDays then 
+					playerData[1] = 1
+				end
+				playerData[2] = thisTime
+    playerData[3] = playerData[3] + 1
+    playerData[4] = false
+    if isOnline(playerName) then
+  				setPlayerData(playerName, playerData)
+  				log("24 hours passed for: "..playerName.." give "..playerData[1], 3.1)
+  				dailyGiveout(playerName, playerData)
+    end
+			elseif state == 2 then
+				playerData[1] = 1
+				playerData[2] = thisTime
+    playerData[3] = 1
+    playerData[4] = true
+    if isOnline(playerName) then
+  				log("48 hours passed for: "..playerName .. " give "..playerData[1], 3.2)
+  				dailyGiveout(playerName, playerData)
+  				setPlayerData(playerName, playerData)
+    end
+			end
+		else
+			log("24 hours not passed for:"..playerName, 3.3)
+		end
+	end
+end
+
+function playersHandler()
+	while true do
+		if buffer[1] ~= nil then
+			log("Processing player ".. buffer[1], 2)
+			onPlayerJoin(buffer[1])
+			table.remove(buffer, 1)
+		else
+
+    sleep(5)
+		end
+	end
+end
+
+print("Core start")
+if not fs.exists("log") then
+	local f = fs.open("log", "w")
+	f.write("")
+	f.close()
+end
+getListItemsCommands()
+parallel.waitForAny(playerLoginDetect, playersHandler)
