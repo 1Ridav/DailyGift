@@ -1,3 +1,8 @@
+---Authors 1Ridav AlexCC
+--main core by 1Ridav
+--giveouts by AlexCC
+
+
 buffer = {}
 ami = peripheral.wrap("adventure map interface_13")
 commandBlock = peripheral.wrap("bottom")
